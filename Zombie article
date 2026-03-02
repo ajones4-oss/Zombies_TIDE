@@ -587,12 +587,12 @@ class="flex justify-center p-1"> <span id="gist-drop-who-1" data-correct-word=""
     <script>
         const TIDE_CONFIG = {
             // GLOBAL
-            APP_TITLE: "TIDE: Grizzly Bears Essay Planner",
+            APP_TITLE: "TIDE: Zombies Essay Planner",
             
             // SOURCE TEXT TAB
             SOURCE: {
-                TITLE: "Grizzly Bears",
-                TEXT: "The North American Grizzly Bear (Ursus arctos horribilis) is a large mammal that has many unique traits. They can weigh over 800 pounds and stand up to eight feet tall on its hind legs. Their large size helps them stay warm in cold environments and gives them better access to food, which helps them survive in their harsh habitats. They primarily inhabit the remote forests and mountains of Alaska, western Canada, and parts of the northwestern United States. They are classified as omnivores, meaning their diet is diverse and includes both plants and meat. They often consume berries, roots, fish, and smaller mammals. To survive the extreme cold of winter, grizzlies enter a deep sleep called hibernation, where they rely on the fat reserves they built up during warmer months. Grizzlies are most famous for their long, non-retractable claws, which they use primarily for digging up food, rather than climbing trees. While they are very powerful and can run surprisingly fast for short distances, they generally avoid human contact.",
+                TITLE: "Zombies",
+                TEXT: "From their origins in folklore to their status as modern pop-culture icons, zombies have evolved significantly within the media. Originally rooted in Haitian culture, the "zombie" was reimagined by filmmaker George A. Romero in the 1960s as a slow-moving, flesh-eating creature that symbolizes societal collapse. Today, zombies appear in everything from high-intensity video games like The Last of Us to hit television shows like The Walking Dead. While they are often used to create a sense of horror and suspense, these monsters also serve as a metaphor for real-world fears, such as viral pandemics, the loss of individuality, or how humans behave when the rules of society suddenly disappear.",
                 
                 // IMAGE 1: MAIN TOPIC IMAGE
                 IMAGE_1: {

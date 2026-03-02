@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Title is now set dynamically -->
+    <title id="app-title-text"></title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Existing Custom styles for drag-and-drop */
+        .draggable {
+            cursor: grab;
+            user-select: none;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        /* ... (rest of the styles remain the same) ... */
+        .drop-target {
+            min-width: 100px;
+            height: 1.5em;
+            border-bottom: 2px dashed #9ca3af; /* Gray-400 */
+            display: inline-flex;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 0 4px;
+            margin: 0 4px;
+            font-weight: 500;
+            color: #1f2937;
+            position: relative;
+        }
+        .gist-drop-target-table, .prompt-drop-target-table {
+            border-bottom: none;
+            border: 2px dashed #9ca3af;
+            height: 4rem;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 8px;
+            border-radius: 6px;
+        }
+        .prompt-drop-target-table {
+            min-height: 4rem;
+            border-color: #f97316; /* Orange-500 */
+        }
+        .drop-target.drag-over {
+            border-bottom-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        .dropped-word {
+            display: inline-block;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: default;
+        }
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .color-btn {
+            border: 2px solid transparent;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-size: 0.9rem;
+        }
+        .color-btn:hover {
+            transform: scale(1.05);
+        }
+        .color-btn.active {
+            border-color: #333;
+            box-shadow: 0 0 8px rgba(0,0,0,0.3);
+            transform: scale(1.05);
+        }
+        .btn-green { background-color: #d4edda; color: #155724; }
+        .btn-yellow { background-color: #fff3cd; color: #856404; }
+        .btn-orange { background-color: #ffe5d0; color: #9c4a00; }
+        .btn-pink { background-color: #f8d7da; color: #721c24; }
+        .btn-eraser { background-color: #ffffff; border: 1px solid #ccc; color: #333; }
+        .sentence {
+            cursor: pointer;
+            padding: 3px 2px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+            margin-right: 2px;
+            display: inline-block; 
+        }
+        .sentence:hover {
+            background-color: #e2e6ea;
+            outline: 1px dashed #ccc;
+        }
+        .highlight-green { background-color: #d4edda; border-bottom: 2px solid #28a745; }
+        .highlight-yellow { background-color: #fff3cd; border-bottom: 2px solid #ffc107; }
+        .highlight-orange { background-color: #ffe5d0; border-bottom: 2px solid #fd7e14; }
+        .highlight-pink { background-color: #f8d7da; border-bottom: 2px solid #dc3545; }
+        .instructions {
+            text-align: center;
+            margin-bottom: 15px;
+            font-style: italic;
+            color: #666;
+        }
+        .tip-box {
+            font-size: 0.9rem;
+            background: #eef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            border: 1px solid #ccd;
+        }
+             /* Custom CSS for robust tooltip visibility */
+        .tooltip-hidden {
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(0);
+        }
+        .tooltip-visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(8px); /* Same as group-hover:translate-y-2 (which is ~8px) */
+        }
+
+        @media print {
+            .no-print, .toolbar, .instructions, .tip-box {
+                display: none !important;
+            }
+            .tab-content {
+                display: block !important;
+            }
+            #essay-content, .card {
+                border: none !important; 
+                box-shadow: none !important;
+            }
+            .highlight-green, .highlight-yellow, .highlight-orange, .highlight-pink, .passage-text {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-6 md:p-10">
+
+        <header class="mb-8 border-b pb-4">
+            <!-- Dynamic Title -->
+            <h1 id="main-title" class="text-4xl font-extrabold text-gray-800 mb-2"></h1>
+            <p class="text-lg text-gray-600">Drag words, complete sections, and finalize your essay.</p>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="mb-6 border-b border-gray-200 no-print">
+            <nav class="-mb-px flex space-x-4 md:space-x-8" aria-label="Tabs">
+                <button 
+                    id="tab-source-button"
+                    class="tab-button py-3 px-4 font-medium text-lg text-white rounded-t-lg bg-indigo-600 hover:bg-indigo-700 transition duration-150"
+                    data-target="tab-source">
+                    Source
+                </button>
+                <button 
+                    id="tab-gist-button"
+                    class="tab-button py-3 px-4 font-medium text-lg text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent transition duration-150"
+                    data-target="tab-gist">
+                    Gist
+                </button>
+                <button 
+                    id="tab-prompt-analysis-button"
+                    class="tab-button py-3 px-4 font-medium text-lg text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent transition duration-150"
+                    data-target="tab-prompt-analysis">
+                    Pull Apart the Prompt
+                </button>
+                              <!-- NEW TIDE STRUCTURE TAB BUTTON -->
+                <button 
+                    id="tab-structure-button"
+                    class="tab-button py-3 px-4 font-medium text-lg text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent transition duration-150"
+                    data-target="tab-structure">
+                    TIDE Structure
+                </button>
+                <button 
+                    id="tab-draft-button"
+                    class="tab-button py-3 px-4 font-medium text-lg text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent transition duration-150"
+                    data-target="tab-draft">
+                    TIDE Draft
+                </button>
+                <button 
+                    id="tab-highlight-button"
+                    class="tab-button py-3 px-4 font-medium text-lg text-gray-500 hover:text-gray-700 hover:border-gray-300 border-b-2 border-transparent transition duration-150"
+                    data-target="tab-highlight">
+                    Highlight TIDE
+                </button>
+            </nav>
+        </div>
+
+        <!-- Tab Content Containers -->
+        
+        <!-- Source Text & Data Tab Content (DEFAULT) -->
+        <div id="tab-source" class="tab-content">
+            <div class="mb-8 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-lg shadow-inner">
+                <!-- Dynamic Source Title -->
+                <h2 id="source-title" class="text-2xl font-bold text-yellow-800 mb-3"></h2>
+                <div class="flex flex-col lg:flex-row gap-6">
+                    <!-- Dynamic Source Text -->
+                    <p class="text-gray-700 leading-relaxed lg:w-3/5" id="source-text-main"></p>
+                    <div class="lg:w-2/5 flex flex-col items-center justify-center">
+                        <!-- Image 1 -->
+                        <img id="source-image-1" src="" 
+                            alt="Image of the source topic" 
+                            class="rounded-lg shadow-md mb-2 w-full h-auto max-h-56 object-cover">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visual Data Images for Size and Weight -->
+            <div class="p-6 bg-gray-100 rounded-xl shadow-md border border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">Topic Visual Data</h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    <!-- Height Comparison Image -->
+                    <div class="p-4 bg-white rounded-lg shadow-lg flex flex-col items-center">
+                        <h3 id="source-image-2-title" class="text-xl font-semibold text-gray-800 mb-3 text-center"></h3>
+                        <!-- Image 2 -->
+                        <img id="source-image-2" src="" 
+                            alt="Comparison scale image" 
+                            class="rounded-lg shadow-md w-full h-auto max-h-56 object-contain">
+                        <p id="source-image-2-caption" class="text-sm mt-2 text-gray-600"></p>
+                    </div>
+
+                    <!-- Weight Reference Image -->
+                    <div class="p-4 bg-white rounded-lg shadow-lg flex flex-col items-center">
+                        <h3 id="source-image-3-title" class="text-xl font-semibold text-gray-800 mb-3 text-center"></h3>
+                        <!-- Image 3 -->
+                        <img id="source-image-3" src="" 
+                            alt="Weight scale image" 
+                            class="rounded-lg shadow-md w-full h-auto max-h-56 object-contain">
+                        <p id="source-image-3-caption" class="text-sm mt-2 text-gray-600"></p>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Gist Tab Content -->
+        <div id="tab-gist" class="tab-content hidden">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-2">Gist: Formulating the Main Idea</h2>
+            <p class="text-lg text-gray-600 mb-6">Drag the components below to build your Gist/Topic sentence. </p>
+
+            <!-- Source Text Duplicate for Reference -->
+            <div class="mb-8 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-lg shadow-inner">
+                <h2 id="gist-source-title" class="text-2xl font-bold text-yellow-800 mb-3"></h2>
+                <div id="gist-source-text">
+                    <p class="text-gray-700 leading-relaxed"></p>
+                </div>
+            </div>
+            <!-- End Source Text Duplicate -->
+
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                <!-- 1/4 COLUMN: Gist Word Bank -->
+                <div class="lg:col-span-1 p-4 bg-purple-50 rounded-lg shadow-md border border-purple-200 h-fit">
+                    <h3 class="text-xl font-semibold text-purple-700 mb-3">Gist Components</h3>
+                    <!-- Dynamic Gist Word Bank -->
+                    <div id="gist-word-bank" class="flex flex-wrap gap-2">
+                        <!-- Content will be injected by JS -->
+                    </div>
+                </div>
+
+                <!-- 3/4 COLUMN: Gist Sentence Builder -->
+                <div class="lg:col-span-3 p-2 bg-white rounded-lg shadow-xl border-t-4 border-purple-500">
+                    <h3 class="text-2xl font-bold text-purple-700 mb-4 px-4">Gist Sentence Chart</h3>
+                    
+                    <div class="w-full border border-gray-300 rounded-lg overflow-hidden">
+                        
+                        <!-- Header Row 1 -->
+                        <div class="grid grid-cols-6 font-bold text-white bg-purple-600">
+                            <div class="col-span-1 p-3 border-r border-purple-700 text-center">Who?</div>
+                            <div class="col-span-1 p-3 border-r border-purple-700 text-center">Did what?</div>
+                            <div class="col-span-1 p-3 border-r border-purple-700 text-center">When? Where?</div>
+                            <div class="col-span-3 p-3 text-center">Why/What happened?</div> 
+                        </div>
+
+                        <!-- Header Row 2 -->
+                        <div class="grid grid-cols-6 text-sm font-semibold text-gray-700 bg-purple-100 border-b border-gray-300">
+                            <div class="col-span-3"></div> 
+                            <div class="p-2 border-r border-gray-300 text-center">Joiner</div>
+                            <div class="p-2 border-r border-gray-300 text-center">Who?</div>
+                            <div class="p-2 text-center">Did what?</div>
+                        </div>
+
+                        <!-- Drop Target Row (IDs match the config structure) -->
+                        <div class="grid grid-cols-6 items-center bg-white p-2 gap-2">
+                          <div 
+class="flex justify-center p-1"> <span id="gist-drop-who-1" data-correct-word="" class="drop-target gist-drop-target-table flex-1"></span> </div>
+                            <div class="flex justify-center p-1"> <span id="gist-drop-what-1" data-correct-word="" class="drop-target gist-drop-target-table flex-1"></span> </div>
+                            <div 
+                             class="flex justify-center p-1"> <span id="gist-drop-where" data-correct-word="" class="drop-target gist-drop-target-table flex-1"></span> </div>
+                            <div class="flex justify-center p-1"> <span id="gist-drop-joiner" data-correct-word="" class="drop-target gist-drop-target-table flex-1"></span> </div>
+                            <div class="flex justify-center p-1"> <span id="gist-drop-who-2" data-correct-word="" class="drop-target gist-drop-target-table flex-1"></span> </div>
+                            <div class="flex justify-center p-1"> <span id="gist-drop-what-2" data-correct-word="" class="drop-target gist-drop-target-table flex-1"></span> </div>
+                        </div>
+
+                    </div>
+
+                    <div class="mt-8 pt-4 border-t border-gray-200 px-4">
+                        <h3 class="text-xl font-semibold text-gray-700 mb-2">Final Gist Sentence (Topic Sentence):</h3>
+                        <p id="gist-result" class="text-lg text-gray-900 bg-gray-50 p-3 rounded-md border border-gray-200 font-medium min-h-[3rem]">
+                            Drag all components into the chart above to form the sentence.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pull Apart the Prompt Tab Content -->
+        <div id="tab-prompt-analysis" class="tab-content hidden">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-2">Pull Apart the Prompt</h2>
+            <p class="text-lg text-gray-600 mb-6">Analyze the prompt below by dragging the components into the correct "Do" (action/verb) or "What" (content/requirement) columns.</p>
+
+            <!-- The Prompt -->
+            <div class="mb-8 p-4 bg-orange-50 border-l-4 border-orange-500 rounded-lg shadow-inner">
+                <h3 class="text-xl font-bold text-orange-800 mb-3">Assignment Prompt:</h3>
+                <!-- Dynamic Prompt Text -->
+                <p id="assignment-prompt-text" class="text-xl font-semibold text-gray-800 leading-relaxed"></p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                <!-- 1/4 COLUMN: Prompt Word Bank -->
+                <div class="lg:col-span-1 p-4 bg-orange-500 rounded-lg shadow-md border border-orange-600 h-fit">
+                    <h3 class="text-xl font-semibold text-white mb-3">Prompt Components</h3>
+                    <!-- Dynamic Prompt Word Bank -->
+                    <div id="prompt-word-bank" class="flex flex-wrap gap-2">
+                        <!-- Content will be injected by JS -->
+                    </div>
+                </div>
+
+                <!-- 3/4 COLUMN: T-Chart Drop Zones -->
+                <div class="lg:col-span-3 p-2 bg-white rounded-lg shadow-xl border-t-4 border-orange-500">
+                    <h3 class="text-2xl font-bold text-orange-700 mb-4 px-4">T-Chart </h3>
+                    
+                    <div class="grid grid-cols-2 w-full border border-gray-300 rounded-lg overflow-hidden">
+                        
+                        <!-- Header Row -->
+                        <div class="font-bold text-white bg-orange-600 p-3 border-r border-orange-700 text-center">Do </div>
+                        <div class="font-bold text-white bg-orange-600 p-3 text-center">What </div>
+
+                        <!-- Drop Targets (IDs for the 3 Do and 3 What targets) -->
+                        <div id="prompt-do-targets" class="p-2 border-r border-gray-300 space-y-2 bg-orange-100">
+                            <span id="prompt-drop-do-1" data-type="Do" class="drop-target prompt-drop-target-table w-full"></span>
+                            <span id="prompt-drop-do-2" data-type="Do" class="drop-target prompt-drop-target-table w-full"></span>
+                            <span id="prompt-drop-do-3" data-type="Do" class="drop-target prompt-drop-target-table w-full"></span>
+                        </div>
+                        <div id="prompt-what-targets" class="p-2 space-y-2 bg-orange-50">
+                            <span id="prompt-drop-what-1" data-type="What" class="drop-target prompt-drop-target-table w-full"></span>
+                            <span id="prompt-drop-what-2" data-type="What" class="drop-target prompt-drop-target-table w-full"></span>
+                            <span id="prompt-drop-what-3" data-type="What" class="drop-target prompt-drop-target-table w-full"></span>
+                        </div>
+
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+        <!-- UPDATED TIDE STRUCTURE TAB CONTENT with onmouseover/onmouseout -->
+        <div id="tab-structure" class="tab-content hidden">
+            <h2 class="text-3xl font-bold text-indigo-700 mb-6 border-b pb-2">The T.I.D.E. Essay Structure</h2>
+            <p class="text-lg text-gray-600 mb-8">Hover over each step to view sentence starter ideas for your draft.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                <!-- T: Topic -->
+                <div id="tide-box-t" onmouseover="showStarters('starters-t')" onmouseout="hideStarters('starters-t')" class="relative p-5 bg-green-100 rounded-xl shadow-md border-t-4 border-green-500 flex flex-col items-center text-center cursor-pointer hover:shadow-lg transition duration-200">
+                    <div class="text-6xl mb-3">💡</div>
+                    <h3 class="text-2xl font-bold text-green-800 mb-2">T: Topic</h3>
+                    <p class="text-sm text-gray-700">Gist / Main Idea / Answer the Question</p>
+                    <p class="text-xs text-gray-500 mt-2">(The first sentence of your paragraph)</p>
+
+                    <!-- Tooltip Container (JS controlled) -->
+                    <div id="starters-t" class="absolute tooltip-hidden w-[150%] max-w-xs md:max-w-sm z-10 p-4 mt-2 top-full left-1/2 -translate-x-1/2 bg-gray-800 text-white text-left text-sm rounded-lg shadow-xl pointer-events-none transition duration-300">
+                        <!-- Content injected by JS -->
+                    </div>
+                </div>
+
+                <!-- I: Information -->
+                <div id="tide-box-i" onmouseover="showStarters('starters-i')" onmouseout="hideStarters('starters-i')" class="relative p-5 bg-yellow-100 rounded-xl shadow-md border-t-4 border-yellow-500 flex flex-col items-center text-center cursor-pointer hover:shadow-lg transition duration-200">
+                    <div class="text-6xl mb-3">📖</div>
+                    <h3 class="text-2xl font-bold text-yellow-800 mb-2">I: Information</h3>
+                    <p class="text-sm text-gray-700">Support your topic with information/evidence from the text.</p>
+                    <p class="text-xs text-gray-500 mt-2">(Usually a direct quote or paraphrase)</p>
+
+                    <!-- Tooltip Container (JS controlled) -->
+                    <div id="starters-i" class="absolute tooltip-hidden w-[150%] max-w-xs md:max-w-sm z-10 p-4 mt-2 top-full left-1/2 -translate-x-1/2 bg-gray-800 text-white text-left text-sm rounded-lg shadow-xl pointer-events-none transition duration-300">
+                        <!-- Content injected by JS -->
+                    </div>
+                </div>
+
+                <!-- D: Details -->
+                <div id="tide-box-d" onmouseover="showStarters('starters-d')" onmouseout="hideStarters('starters-d')" class="relative p-5 bg-orange-100 rounded-xl shadow-md border-t-4 border-orange-500 flex flex-col items-center text-center cursor-pointer hover:shadow-lg transition duration-200">
+                    <div class="text-6xl mb-3">🧠</div>
+                    <h3 class="text-2xl font-bold text-orange-800 mb-2">D: Details</h3>
+                    <p class="text-sm text-gray-700">Explain, elaborate, or say more about the Information in your own words.</p>
+                    <p class="text-xs text-gray-500 mt-2">(Your analysis or connection to the topic)</p>
+
+                    <!-- Tooltip Container (JS controlled) -->
+                    <div id="starters-d" class="absolute tooltip-hidden w-[150%] max-w-xs md:max-w-sm z-10 p-4 mt-2 top-full left-1/2 -translate-x-1/2 bg-gray-800 text-white text-left text-sm rounded-lg shadow-xl pointer-events-none transition duration-300">
+                        <!-- Content injected by JS -->
+                    </div>
+                </div>
+
+                <!-- E: Ending -->
+                <div id="tide-box-e" onmouseover="showStarters('starters-e')" onmouseout="hideStarters('starters-e')" class="relative p-5 bg-pink-100 rounded-xl shadow-md border-t-4 border-pink-500 flex flex-col items-center text-center cursor-pointer hover:shadow-lg transition duration-200">
+                    <div class="text-6xl mb-3">🔄💡</div>
+                    <h3 class="text-2xl font-bold text-pink-800 mb-2">E: Ending</h3>
+                    <p class="text-sm text-gray-700">Restate the Topic sentence using different words.</p>
+                    <p class="text-xs text-gray-500 mt-2">(The final sentence of your paragraph)</p>
+
+                    <!-- Tooltip Container (JS controlled) -->
+                    <div id="starters-e" class="absolute tooltip-hidden w-[150%] max-w-xs md:max-w-sm z-10 p-4 mt-2 top-full left-1/2 -translate-x-1/2 bg-gray-800 text-white text-left text-sm rounded-lg shadow-xl pointer-events-none transition duration-300">
+                        <!-- Content injected by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- TIDE Draft Tab Content -->
+        <div id="tab-draft" class="tab-content hidden">
+            <h2 class="text-3xl font-bold text-green-700 mb-6 border-b pb-2">TIDE Step-by-Step Draft</h2>
+            
+            <!-- Source Text Duplicate for Reference (Text Only) -->
+            <div class="mb-8 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-lg shadow-inner">
+                <h3 id="draft-source-title" class="text-2xl font-bold text-yellow-800 mb-3"></h3>
+                <div id="draft-source-text">
+                    <p class="text-gray-700 leading-relaxed"></p>
+                </div>
+            </div>
+            
+            <!-- ASSIGNMENT PROMPT FOR REFERENCE (NEW SECTION) -->
+            <div class="mb-8 p-4 bg-orange-50 border-l-4 border-orange-500 rounded-lg shadow-inner">
+                <h3 class="text-xl font-bold text-orange-800 mb-3">Assignment Prompt:</h3>
+                <!-- Dynamic Prompt Text -->
+                <p id="draft-assignment-prompt-text" class="text-gray-700 leading-relaxed"></p>
+            </div>
+            <!-- END NEW SECTION -->
+
+            <div class="flex flex-col md:flex-row justify-between gap-8 mb-10 items-start">
+                
+                <!-- 1/3 COLUMN: Word Bank - Sticky fix wrapper -->
+                <div class="md:w-1/3 md:sticky md:top-8">
+                    <div class="p-6 bg-blue-50 border border-blue-200 rounded-lg shadow-md">
+                        <h2 class="text-2xl font-bold text-blue-700 mb-4">Word Bank</h2>
+                        <!-- Dynamic Word Bank -->
+                        <div id="word-bank" class="flex flex-wrap gap-3">
+                            <!-- Content will be injected by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2/3 COLUMN: TIDE Structure Assignment -->
+                <div class="md:w-2/3">
+
+                    <div id="tide-steps" class="space-y-6">
+
+                        <!-- T (Topic) -->
+                        <div id="tide-t-section" class="p-4 bg-green-50 rounded-lg shadow-sm border border-green-200">
+                            <h3 class="text-xl font-semibold text-green-800 mb-2">T (Topic) - Gist / Main Idea</h3>
+                            <p id="tide-t-sentence" class="text-gray-700">
+                                <!-- Sentence injected here -->
+                            </p>
+                            <small class="text-gray-500">This sentence is your Topic Sentence, from the Gist.</small>
+                        </div>
+
+                        <!-- I (Information 1) & D (Details 1) -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div id="tide-i1-section" class="p-4 bg-yellow-50 rounded-lg shadow-sm border border-yellow-200">
+                                <h3 class="text-xl font-semibold text-yellow-800 mb-2">I1 (Information)</h3>
+                                <p id="tide-i1-sentence" class="text-gray-700">
+                                    <!-- Sentence injected here -->
+                                </p>
+                            </div>
+                            <div class="p-4 bg-orange-100 rounded-lg shadow-sm border border-orange-300">
+                                <h3 id="tide-d1-title" class="text-xl font-semibold text-orange-800 mb-2">D1 (Details)</h3>
+                                <p id="tide-d1-prefix" class="text-gray-700 mb-2 font-medium"></p>
+                                <textarea id="detail-1-text" rows="4" class="w-full p-2 border border-orange-400 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- I (Information 2) & D (Details 2) -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div id="tide-i2-section" class="p-4 bg-yellow-50 rounded-lg shadow-sm border border-yellow-200">
+                                <h3 class="text-xl font-semibold text-yellow-800 mb-2">I2 (Information)</h3>
+                                <p id="tide-i2-sentence" class="text-gray-700">
+                                    <!-- Sentence injected here -->
+                                </p>
+                            </div>
+                            <div class="p-4 bg-orange-100 rounded-lg shadow-sm border border-orange-300">
+                                <h3 id="tide-d2-title" class="text-xl font-semibold text-orange-800 mb-2">D2 (Details)</h3>
+                                <!-- D2 is now just a blank input, no prefix. -->
+                                <textarea id="detail-2-text" rows="4" class="w-full p-2 border border-orange-400 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- E (Ending) -->
+                        <div id="tide-e-section" class="p-4 bg-pink-50 rounded-lg shadow-sm border border-pink-200">
+                            <h3 class="text-xl font-semibold text-pink-800 mb-2">E (Ending) - Concluding Sentence</h3>
+                            <p id="tide-e-sentence" class="text-gray-700">
+                                <!-- Sentence injected here -->
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Paragraph Generation -->
+                    <div class="mt-10 pt-6 border-t-2 border-green-300">
+                        <h3 class="text-2xl font-bold text-green-700 mb-4">Completed Draft</h3>
+                        
+                        <button id="generate-button" onclick="generateParagraph()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition duration-300 ease-in-out">
+                            Click to Generate Paragraph
+                        </button>
+
+                        <div id="compiled-paragraph-container" class="mt-4 p-5 bg-white border border-gray-300 rounded-lg min-h-[5rem]">
+                            <p id="compiled-paragraph" class="text-lg text-gray-800 italic">
+                                Your compiled TIDE paragraph will appear here after clicking the button.
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Highlight TIDE Structure Tab Content -->
+        <div id="tab-highlight" class="tab-content hidden">
+            <div class="card p-0 md:p-6 bg-white shadow-none md:shadow-lg border-0 md:border">
+                <h2 class="text-3xl font-bold text-gray-800 mb-4 border-b pb-2 px-4 md:px-0">Highlight the T.I.D.E. Analysis</h2>
+                
+                <div class="tip-box">
+                    Identify the <strong>Topic,</strong> <strong>Information,</strong> <strong>Details, </strong>and <strong>Ending</strong> in the paragraph below.
+                </div>
+
+                <p class="instructions">Select a tool below, then click a sentence to highlight.</p>
+                
+                <div class="toolbar no-print">
+                    <button class="color-btn btn-green" onclick="setColor('green')">T (Topic)</button>
+                    <button class="color-btn btn-yellow" onclick="setColor('yellow')">I (Information)</button>
+                    <button class="color-btn btn-orange" onclick="setColor('orange')">D (Details)</button>
+                    <button class="color-btn btn-pink" onclick="setColor('pink')">E (Ending)</button>
+                    <button class="color-btn btn-eraser" onclick="setColor('eraser')">Erase</button>
+                </div>
+
+                <!-- Dynamic Highlight Text -->
+                <div id="response-text" style="font-size: 1.15rem; line-height: 2.2; text-align: justify;">
+                    <!-- Sentences will be injected by JS -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- PDF/Print Button Section -->
+    <div id="print-container" class="max-w-4xl mx-auto mt-6 no-print hidden"> 
+        <button id="print-button" onclick="window.print()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition duration-300 ease-in-out">
+            Save Work as PDF
+        </button>
+    </div>
+ <!-- 
+        ====================================================================================
+        CONFIGURATION SECTION: EDIT THIS OBJECT ONLY TO CHANGE THE ESSAY TOPIC AND CONTENT
+        ====================================================================================
+    -->
+    <script>
+        const TIDE_CONFIG = {
+            // GLOBAL
+            APP_TITLE: "TIDE: Grizzly Bears Essay Planner",
+            
+            // SOURCE TEXT TAB
+            SOURCE: {
+                TITLE: "Grizzly Bears",
+                TEXT: "The North American Grizzly Bear (Ursus arctos horribilis) is a large mammal that has many unique traits. They can weigh over 800 pounds and stand up to eight feet tall on its hind legs. Their large size helps them stay warm in cold environments and gives them better access to food, which helps them survive in their harsh habitats. They primarily inhabit the remote forests and mountains of Alaska, western Canada, and parts of the northwestern United States. They are classified as omnivores, meaning their diet is diverse and includes both plants and meat. They often consume berries, roots, fish, and smaller mammals. To survive the extreme cold of winter, grizzlies enter a deep sleep called hibernation, where they rely on the fat reserves they built up during warmer months. Grizzlies are most famous for their long, non-retractable claws, which they use primarily for digging up food, rather than climbing trees. While they are very powerful and can run surprisingly fast for short distances, they generally avoid human contact.",
+                
+                // IMAGE 1: MAIN TOPIC IMAGE
+                IMAGE_1: {
+                    URL: "https://www.nwf.org/-/media/NEW-WEBSITE/Shared-Folder/Wildlife/Mammals/mammal_grizzy-bear_600x300.jpg", 
+                    FALLBACK_TEXT: "Grizzly Bear Visual Placeholder"
+                },
+                
+                // IMAGE 2: DATA POINT IMAGE (HEIGHT)
+                IMAGE_2: {
+                    TITLE: "Height Comparison (Standing)",
+                    URL: "https://www.vitalground.org/wp-content/uploads/2018/07/JonFreeman_BartStanding_web-500x647.jpg", // <--- CHANGE THIS URL
+                    CAPTION: "The grizzly bear (8 ft) towers over the average human (6 ft).",
+                    FALLBACK_TEXT: "Height Scale Placeholder"
+                },
+                
+                // IMAGE 3: DATA POINT IMAGE (WEIGHT)
+                IMAGE_3: {
+                    TITLE: "Weight Reference (800+ Pounds)",
+                    URL: "https://live.staticflickr.com/65535/54963961675_f23f979312_b.jpg", // <--- CHANGE THIS URL
+                    CAPTION: "The bear's weight (800+ lbs) compared to a vending machine (650 lbs)",
+                    FALLBACK_TEXT: "Weight Scale Placeholder"
+                }
+            },
+            
+            // PROMPT ANALYSIS TAB
+            PROMPT: {
+                TEXT: "Write at least one complete paragraph. Summarize the information from the text to explain how grizzly bears’ traits help them survive in their habitat.",
+                COMPONENTS: [
+                    { word: "write", type: "Do" },
+                    { word: "information from the text", type: "What" },
+                    { word: "explain", type: "Do" },
+                    { word: "one paragraph", type: "What" },
+                    { word: "summarize", type: "Do" },
+                    { word: "how grizzly bear’s traits help them survive", type: "What" }
+                ]
+            },
+
+            // GIST TAB
+            GIST: {
+                COMPONENTS: [
+                    { word: "Grizzly bears", id: "who-1" },
+                                                           { word: "bears", id: "who-2" },
+                    { word: "survive", id: "what-1" },
+                                                           { word: "because", id: "joiner" }, 
+                  { word: "in the North American habitat", id: "where" },
+                   
+                    { word: "have unique traits and diets", id: "what-2" }
+                ],
+                // Template uses the IDs from the COMPONENTS list above
+                TEMPLATE: "{who-1} {what-1} {where} {joiner} {who-2} {what-2}."
+            },
+                        // NEW TIDE STRUCTURE DATA FOR TOOLTIPS
+            TIDE_STRUCTURE: {
+                STARTERS: {
+                    T: ["The text states...", "The main idea is...", "The author emphasizes...", "It is clear that..."],
+                    I: ["For example...", "According to the source...", "The passage says...", "The evidence shows..."],
+                    D: ["This means that...", "One reason why...", "It is important because...", "In other words..."],
+                    E: ["In conclusion...", "To summarize...", "Overall, it is clear that...", "As a result..."]
+                }
+            },
+
+            // TIDE DRAFT TAB
+            DRAFT: {
+                WORD_BANK_ITEMS: [
+                    { word: "800", id: "word-800" },
+                    { word: "claws", id: "word-claws" },
+                    { word: "meat", id: "word-meat" },
+                    { word: "omnivores", id: "word-omnivores" },
+                    { word: "survive", id: "word-survive" }
+                ],
+                SENTENCES: {
+                    // T: Topic Sentence (Uses Gist Result)
+                    T: {
+                        TEXT: "Grizzly bears <span id=\"drop-target-t\" data-correct-word=\"survive\" class=\"drop-target\"></span> in the North American habitat because bears have unique traits and diets.",
+                        CORRECT_WORD: "survive",
+                        DROP_ID: "drop-target-t"
+                    },
+                    // I1: Information 1 (Size)
+                    I1: {
+                        TITLE: "Size Quote",
+                        TEXT: "According to the text, \"the Grizzly Bear is a large mammal that can weigh over <span id=\"drop-target-i1\" data-correct-word=\"800\" class=\"drop-target\"></span> pounds and stand up to eight feet tall on its hind legs.\"",
+                        CORRECT_WORD: "800",
+                        DROP_ID: "drop-target-i1"
+                    },
+                    // D1: Details 1 (Expand on Size)
+                    D1: {
+                        TITLE: "Expand on Size",
+                        PREFIX: "This large size is helpful because",
+                        PLACEHOLDER: "...type here"
+                    },
+                    // I2: Information 2 (Diet)
+                    I2: {
+                        TITLE: "Diet Quote",
+                        TEXT: "The author states, \"they are classified as <span id=\"drop-target-i2-a\" data-correct-word=\"omnivores\" class=\"drop-target\"></span>, meaning their diet is diverse and includes both plants and <span id=\"drop-target-i2-b\" data-correct-word=\"meat\" class=\"drop-target\"></span>.\"",
+                        CORRECT_WORD_A: "omnivores",
+                        CORRECT_WORD_B: "meat",
+                        DROP_ID_A: "drop-target-i2-a",
+                        DROP_ID_B: "drop-target-i2-b"
+                    },
+                    // D2: Details 2 (Expand on Diet) - NO PREFIX, student writes full sentence
+                    D2: {
+                        TITLE: "Expand on Diet",
+                        PREFIX: "", 
+                        PLACEHOLDER: "Type your sentence here"
+                    },
+                    // E: Ending Sentence
+                    E: {
+                        TEXT: "Overall, the Grizzly Bear is a highly adaptable and powerful mammal that relies on its diet and powerful <span id=\"drop-target-e\" data-correct-word=\"claws\" class=\"drop-target\"></span> to thrive.",
+                        CORRECT_WORD: "claws",
+                        DROP_ID: "drop-target-e"
+                    }
+                }
+            },
+
+            // HIGHLIGHT TAB
+            HIGHLIGHT: {
+                PARAGRAPH_SENTENCES: [
+                    "Grizzly bears use claws, fat, and food to survive in their enviornment.",
+                    "In the text it says, that grizzlies, \"rely on fat reserves they built up during warmer months,\" to survive during the extreme cold of winter.",
+                    "To build up these fat reserves they eat many different foods.",
+                    "They are able to do this because, \"they are classified as omnivores.\"",
+                    "They also use their claws to help obtain food.",
+                    "In conclusion, grizzlies rely on maintaining their large size to survive."
+                ]
+            }
+        };
+    </script>
+    <!-- 
+        ====================================================================================
+        APPLICATION LOGIC SECTION: THIS SHOULD GENERALLY NOT BE MODIFIED
+        ====================================================================================
+    -->
+       <script>
+        // --- TOOLTIP JAVASCRIPT FUNCTIONS (NEW) ---
+        function showStarters(id) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.classList.remove('tooltip-hidden');
+                element.classList.add('tooltip-visible');
+            }
+        }
+
+        function hideStarters(id) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.classList.remove('tooltip-visible');
+                element.classList.add('tooltip-hidden');
+            }
+        }
+        // --- HIGHLIGHTING LOGIC ---
+        let currentColor = null;
+
+        function setColor(color) {
+            currentColor = color;
+            const buttons = document.querySelectorAll('.color-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.querySelector(`.btn-${color}`);
+            if(activeBtn) activeBtn.classList.add('active');
+        }
+
+        function highlight(element) {
+            if (!currentColor) {
+                console.error("Please select a highlighter color first!");
+                return;
+            }
+            element.classList.remove('highlight-green', 'highlight-yellow', 'highlight-orange', 'highlight-pink');
+            if (currentColor !== 'eraser') {
+                element.classList.add(`highlight-${currentColor}`);
+            }
+        }
+        
+        // --- TIDE PARAGRAPH GENERATION LOGIC ---
+
+    function getDroppedWord(dropTargetId) {
+            const target = document.getElementById(dropTargetId);
+            const droppedSpan = target ? target.querySelector('.dropped-word') : null;
+            return droppedSpan ? droppedSpan.textContent.trim() : '';
+        }
+
+        /**
+         * Cleans up the text for Information and Ending sections: adds a period if missing and capitalizes/trims.
+         */
+        function cleanSentence(text) {
+            let cleaned = text.trim();
+            // Ensure it starts with a capital letter
+            if (cleaned.length > 0) {
+                cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+            }
+            // Ensure it ends with a period, question mark, or exclamation mark
+             {
+                
+            }
+            return cleaned;
+        }
+        
+        /**
+         * Cleans up the text for Detail sections: only capitalizes and trims, DOES NOT add a period.
+         * The user must provide the final punctuation.
+         */
+        function cleanAndCapitalize(text) {
+            let cleaned = text.trim();
+            // Ensure it starts with a capital letter
+            if (cleaned.length > 0) {
+                cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+            }
+            return cleaned;
+        }
+
+
+        function generateParagraph() {
+            const config = TIDE_CONFIG.DRAFT.SENTENCES;
+            const compiledParagraphElement = document.getElementById('compiled-paragraph');
+            
+            // T (Topic Sentence) - Already includes dropped word placeholder
+            const T_elem = document.getElementById('tide-t-sentence');
+            const T = cleanSentence(T_elem.textContent.trim());
+          
+            // I1 (Information 1 - Size) - Already includes dropped word placeholder
+            const I1_elem = document.getElementById('tide-i1-sentence');
+            const I1 = cleanSentence(I1_elem.textContent.trim());
+            
+            // D1 (Details 1 - Expand on Size) - Requires text input
+            const d1Text = document.getElementById('detail-1-text').value;
+            const D1_prefix = document.getElementById('tide-d1-prefix').textContent;
+            let D1 = `${D1_prefix} ${d1Text || '[ERROR: Write expansion details here]'}`; 
+            D1 = cleanAndCapitalize(D1);
+            
+            // I2 (Information 2 - Diet) - Already includes dropped word placeholders
+            const I2_elem = document.getElementById('tide-i2-sentence');
+            const I2 = cleanSentence(I2_elem.textContent.trim());
+
+            // D2 (Details 2 - Expand on Diet) - Requires text input (FULL SENTENCE)
+            const d2Text = document.getElementById('detail-2-text').value;
+            let D2 = d2Text || '[ERROR: Write diet expansion details here]'; 
+            D2 = cleanAndCapitalize(D2); 
+
+            // E (Ending Sentence) - Requires E drop target word
+            const E_elem = document.getElementById('tide-e-sentence');
+            const E = cleanSentence(E_elem.textContent.trim());
+
+
+            // --- 7. Compile and Format the Final Paragraph ---
+            const rawParagraph = [T, I1, D1, I2, D2, E].join(' ');
+            
+            // Clean up multiple spaces between sentences
+            const compiledParagraph = rawParagraph.replace(/\s\s+/g, ' '); 
+
+            // Update the display element
+            compiledParagraphElement.textContent = compiledParagraph;
+            compiledParagraphElement.classList.remove('italic', 'text-gray-500');
+            compiledParagraphElement.classList.add('font-normal', 'text-gray-800');
+        }
+
+        // --- DYNAMIC CONTENT INITIALIZATION LOGIC ---
+
+        function updateGistResult() {
+            const gistConfig = TIDE_CONFIG.GIST;
+            
+            // Array of drop target IDs in order of the template
+            const dropTargetIds = gistConfig.COMPONENTS.map(c => `gist-drop-${c.id}`);
+
+            // Get the content of each dropped word
+            const droppedWords = dropTargetIds.map(id => 
+                document.getElementById(id).querySelector('.dropped-word')?.textContent
+            );
+            
+            const resultElement = document.getElementById('gist-result');
+
+            // Filter out undefined/null words (parts not dropped yet)
+            const sentenceParts = droppedWords.filter(p => p !== undefined && p !== null && p !== '');
+            
+            if (sentenceParts.length === gistConfig.COMPONENTS.length) {
+                // Assemble the sentence from the assembled parts
+                let sentence = sentenceParts.join(' ');
+                sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1) + '.';
+                resultElement.textContent = sentence;
+                resultElement.classList.add('font-bold', 'text-green-700');
+                resultElement.classList.remove('text-gray-900');
+            } else {
+                resultElement.textContent = 'Drag all components into the chart above to form the sentence.';
+                resultElement.classList.remove('font-bold', 'text-green-700');
+                resultElement.classList.add('text-gray-900');
+            }
+        }
+       // --- NEW FUNCTION TO POPULATE STRUCTURE STARTERS ---
+        function populateStructureStarters() {
+            const starters = TIDE_CONFIG.TIDE_STRUCTURE.STARTERS;
+            const codes = ['T', 'I', 'D', 'E'];
+
+            codes.forEach(code => {
+                const container = document.getElementById(`starters-${code.toLowerCase()}`);
+                if (container) {
+                    let html = `<p class="font-bold text-yellow-300 mb-1">${code} Starters:</p><ul class="list-disc pl-5 space-y-1">`;
+                    starters[code].forEach(starter => {
+                        html += `<li>${starter}</li>`;
+                    });
+                    html += `</ul>`;
+                    container.innerHTML = html;
+                }
+            });
+        }
+        function initializeApp() {
+            // 1. Set Global Titles
+            document.title = TIDE_CONFIG.APP_TITLE;
+            document.getElementById('main-title').textContent = TIDE_CONFIG.APP_TITLE;
+            
+            // 2. Set Source Tab Content
+            document.getElementById('source-title').textContent = TIDE_CONFIG.SOURCE.TITLE;
+            document.getElementById('source-text-main').textContent = TIDE_CONFIG.SOURCE.TEXT;
+
+            // Set Gist & Draft Source titles/text
+            document.getElementById('gist-source-title').textContent = TIDE_CONFIG.SOURCE.TITLE;
+            document.getElementById('gist-source-text').querySelector('p').textContent = TIDE_CONFIG.SOURCE.TEXT;
+            document.getElementById('draft-source-title').textContent = TIDE_CONFIG.SOURCE.TITLE;
+            document.getElementById('draft-source-text').querySelector('p').textContent = TIDE_CONFIG.SOURCE.TEXT;
+
+            // NEW: Set Draft Assignment Prompt Text
+            document.getElementById('draft-assignment-prompt-text').textContent = TIDE_CONFIG.PROMPT.TEXT;
+
+
+            // Set Images
+            const img1 = document.getElementById('source-image-1');
+            img1.src = TIDE_CONFIG.SOURCE.IMAGE_1.URL;
+            img1.onerror = function() { this.src = `https://placehold.co/400x300/e9d5ff/6b21a8?text=${TIDE_CONFIG.SOURCE.IMAGE_1.FALLBACK_TEXT.replace(/\s/g, '+')}`; };
+
+            const img2 = document.getElementById('source-image-2');
+            document.getElementById('source-image-2-title').textContent = TIDE_CONFIG.SOURCE.IMAGE_2.TITLE;
+            document.getElementById('source-image-2-caption').textContent = TIDE_CONFIG.SOURCE.IMAGE_2.CAPTION;
+            img2.src = TIDE_CONFIG.SOURCE.IMAGE_2.URL;
+            img2.onerror = function() { this.src = `https://placehold.co/300x200/99f6e4/0d9488?text=${TIDE_CONFIG.SOURCE.IMAGE_2.FALLBACK_TEXT.replace(/\s/g, '+')}`; };
+
+
+            const img3 = document.getElementById('source-image-3');
+            document.getElementById('source-image-3-title').textContent = TIDE_CONFIG.SOURCE.IMAGE_3.TITLE;
+            document.getElementById('source-image-3-caption').textContent = TIDE_CONFIG.SOURCE.IMAGE_3.CAPTION;
+            img3.src = TIDE_CONFIG.SOURCE.IMAGE_3.URL;
+            img3.onerror = function() { this.src = `https://placehold.co/300x200/fca5a5/ef4444?text=${TIDE_CONFIG.SOURCE.IMAGE_3.FALLBACK_TEXT.replace(/\s/g, '+')}`; };
+
+            // 3. Set Prompt Analysis Content
+            document.getElementById('assignment-prompt-text').textContent = TIDE_CONFIG.PROMPT.TEXT;
+            
+            const promptWordBank = document.getElementById('prompt-word-bank');
+            TIDE_CONFIG.PROMPT.COMPONENTS.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.id = `prompt-word-${index}`;
+                div.dataset.word = item.word;
+                div.dataset.type = item.type;
+                div.classList.add('draggable', 'prompt-draggable', 'bg-white', 'text-orange-800', 'px-3', 'py-1', 'rounded-full', 'shadow-md', 'hover:bg-gray-100', 'text-sm', 'font-medium');
+                div.textContent = item.word;
+                promptWordBank.appendChild(div);
+            });
+
+            // 4. Set Gist Tab Content & Drop Target Words
+            const gistWordBank = document.getElementById('gist-word-bank');
+            const gistComponents = TIDE_CONFIG.GIST.COMPONENTS;
+            gistComponents.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.id = `gist-word-${item.id}`;
+                div.dataset.word = item.word;
+                div.classList.add('draggable', 'gist-draggable', 'bg-purple-500', 'text-white', 'px-3', 'py-1', 'rounded-full', 'shadow-md', 'hover:bg-purple-600', 'text-sm', 'font-medium');
+                div.textContent = item.word;
+                gistWordBank.appendChild(div);
+                
+                // Set the correct word on the drop targets
+                const dropTarget = document.getElementById(`gist-drop-${item.id}`);
+                if (dropTarget) {
+                    dropTarget.dataset.correctWord = item.word;
+                }
+            });
+
+
+            // 5. Set TIDE Draft Content (T, I, D, E)
+            const draftConfig = TIDE_CONFIG.DRAFT.SENTENCES;
+            
+            // T
+            document.getElementById('tide-t-sentence').innerHTML = draftConfig.T.TEXT;
+            
+            // I1
+            document.getElementById('tide-i1-section').querySelector('h3').textContent = `I (Information) - ${draftConfig.I1.TITLE}`;
+            document.getElementById('tide-i1-sentence').innerHTML = draftConfig.I1.TEXT;
+            
+            // D1
+            document.getElementById('tide-d1-title').textContent = `D (Details) - ${draftConfig.D1.TITLE}`;
+            document.getElementById('tide-d1-prefix').textContent = draftConfig.D1.PREFIX;
+            document.getElementById('detail-1-text').placeholder = draftConfig.D1.PLACEHOLDER;
+
+            // I2
+            document.getElementById('tide-i2-section').querySelector('h3').textContent = `I (Information) - ${draftConfig.I2.TITLE}`;
+            document.getElementById('tide-i2-sentence').innerHTML = draftConfig.I2.TEXT;
+            
+            // D2
+            document.getElementById('tide-d2-title').textContent = `D (Details) - ${draftConfig.D2.TITLE}`;
+            document.getElementById('detail-2-text').placeholder = draftConfig.D2.PLACEHOLDER;
+            
+            // E
+            document.getElementById('tide-e-sentence').innerHTML = draftConfig.E.TEXT;
+
+            // Draft Word Bank
+            const wordBank = document.getElementById('word-bank');
+            TIDE_CONFIG.DRAFT.WORD_BANK_ITEMS.forEach(item => {
+                const div = document.createElement('div');
+                div.id = item.id;
+                div.dataset.word = item.word;
+                div.classList.add('draggable', 'bg-blue-500', 'text-white', 'px-4', 'py-2', 'rounded-lg', 'shadow-md', 'hover:bg-blue-600', 'transition', 'duration-150', 'ease-in-out', 'text-lg', 'font-semibold');
+                div.textContent = item.word;
+                wordBank.appendChild(div);
+            });
+
+            // 6. Set Highlight Tab Sentences
+            const highlightTextContainer = document.getElementById('response-text');
+            highlightTextContainer.innerHTML = ''; // Clear existing content
+            TIDE_CONFIG.HIGHLIGHT.PARAGRAPH_SENTENCES.forEach(sentence => {
+                const span = document.createElement('span');
+                span.classList.add('sentence');
+                span.setAttribute('onclick', 'highlight(this)');
+                span.textContent = sentence;
+                highlightTextContainer.appendChild(span);
+            });
+            // 7. Populate TIDE Structure Tooltips
+            populateStructureStarters();
+
+            // 8. Re-select draggables/dropTargets and Initialize Drag/Drop Listeners
+            let draggables = document.querySelectorAll('.draggable');
+            let dropTargets = document.querySelectorAll('.drop-target');
+            let draggedItem = null;
+
+            // --- TAB SWITCHING LOGIC (Copied from original) ---
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            function showTab(targetId) {
+                tabContents.forEach(content => {
+                    content.classList.add('hidden');
+                });
+                tabButtons.forEach(button => {
+                    button.classList.remove('bg-indigo-600', 'text-white', 'hover:bg-indigo-700');
+                    button.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300', 'border-b-2', 'border-transparent');
+                });
+                const activeContent = document.getElementById(targetId);
+                if (activeContent) {
+                    activeContent.classList.remove('hidden');
+                }
+                const activeButton = document.querySelector(`[data-target="${targetId}"]`);
+                if (activeButton) {
+                    activeButton.classList.add('bg-indigo-600', 'text-white', 'hover:bg-indigo-700');
+                    activeButton.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300', 'border-b-2', 'border-transparent');
+                }
+                const printButtonContainer = document.getElementById('print-container');
+                if (printButtonContainer) {
+                    if (targetId === 'tab-source'|| targetId === 'tab-structure') {
+                        printButtonContainer.classList.add('hidden');
+                    } else {
+                        printButtonContainer.classList.remove('hidden');
+                    }
+                }
+            }
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    showTab(button.dataset.target);
+                });
+            });
+
+            showTab('tab-source');
+
+
+            // --- DRAG AND DROP LISTENERS ---
+            let scrollInterval = null;
+            const scrollSpeed = 20;
+            const scrollZone = 100;
+
+            document.addEventListener('dragover', (e) => {
+                if (!draggedItem) return;
+                e.preventDefault();
+                const mouseY = e.clientY;
+                const viewportHeight = window.innerHeight;
+                if (scrollInterval) {
+                    clearInterval(scrollInterval);
+                    scrollInterval = null;
+                }
+                if (mouseY < scrollZone) {
+                    scrollInterval = setInterval(() => {
+                        if (window.scrollY > 0) {
+                            window.scrollBy(0, -scrollSpeed);
+                        } else {
+                            clearInterval(scrollInterval);
+                            scrollInterval = null;
+                        }
+                    }, 50); 
+                } else if (mouseY > viewportHeight - scrollZone) {
+                    scrollInterval = setInterval(() => {
+                        if (window.scrollY + viewportHeight < document.documentElement.scrollHeight) {
+                            window.scrollBy(0, scrollSpeed);
+                        } else {
+                            clearInterval(scrollInterval);
+                            scrollInterval = null;
+                        }
+                    }, 50); 
+                }
+            });
+
+            function stopScrolling() {
+                if (scrollInterval) {
+                    clearInterval(scrollInterval);
+                    scrollInterval = null;
+                }
+            }
+            
+            document.addEventListener('dragend', stopScrolling);
+            document.addEventListener('drop', stopScrolling);
+
+
+            draggables.forEach(draggable => {
+                draggable.setAttribute('draggable', true);
+                draggable.addEventListener('dragstart', (e) => {
+                    const parentTab = draggable.closest('.tab-content');
+                    if (!parentTab || parentTab.classList.contains('hidden')) {
+                        e.preventDefault();
+                        return;
+                    }
+                    draggedItem = draggable;
+                    e.dataTransfer.setData('text/plain', draggable.dataset.word);
+                    e.dataTransfer.setData('text/draggable-id', draggable.id);
+                    e.dataTransfer.setData('text/data-type', draggable.dataset.type || 'unknown');
+                    setTimeout(() => draggable.style.opacity = '0.5', 0);
+                });
+
+                draggable.addEventListener('dragend', () => {
+                    if (draggedItem && draggedItem.style.opacity !== '0') {
+                        draggedItem.style.opacity = '1';
+                    }
+                    draggedItem = null;
+                });
+            });
+
+            dropTargets.forEach(target => {
+                target.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    target.classList.add('drag-over');
+                });
+
+                target.addEventListener('dragleave', () => {
+                    target.classList.remove('drag-over');
+                });
+
+                target.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    target.classList.remove('drag-over');
+
+                    const word = e.dataTransfer.getData('text/plain');
+                    const draggedId = e.dataTransfer.getData('text/draggable-id');
+                    const wordType = e.dataTransfer.getData('text/data-type');
+                    const correctWord = target.dataset.correctWord;
+                    const correctType = target.dataset.type;
+
+                    if (target.children.length === 0) {
+                        
+                        // Prompt Analysis Check
+                        if (target.classList.contains('prompt-drop-target-table') && wordType !== correctType) {
+                            target.style.borderColor = 'red';
+                            setTimeout(() => { target.style.borderColor = '#f97316'; }, 500);
+                            return; 
+                        }
+
+                        const droppedElement = document.createElement('span');
+                        droppedElement.classList.add('dropped-word');
+                        droppedElement.textContent = word;
+                        droppedElement.dataset.sourceId = draggedId;
+
+                        let isCorrect = false;
+
+                        if (target.classList.contains('prompt-drop-target-table')) {
+                             isCorrect = true; 
+                             droppedElement.classList.add('bg-orange-700'); 
+                        } else if (word === correctWord) {
+                            isCorrect = true;
+                            droppedElement.classList.add('bg-green-500');
+                        } else {
+                            droppedElement.classList.add('bg-red-500'); 
+                        }
+
+                        if (!isCorrect && !target.classList.contains('prompt-drop-target-table')) {
+                            droppedElement.classList.add('bg-red-500');
+                        }
+
+                        target.appendChild(droppedElement);
+                        
+                        let originalWordElement = document.getElementById(draggedId);
+                        if (originalWordElement) {
+                            originalWordElement.style.display = 'none';
+                        }
+                        
+                        if (target.classList.contains('gist-drop-target-table')) {
+                            updateGistResult();
+                        }
+                    }
+                });
+
+                target.addEventListener('dblclick', (e) => {
+                    const targetElement = e.target.closest('.drop-target');
+                    if (targetElement.id === 'drop-target-t-who') return; 
+
+                    const droppedWordSpan = targetElement.querySelector('.dropped-word');
+
+                    if (droppedWordSpan) {
+                        const sourceId = droppedWordSpan.dataset.sourceId;
+
+                        droppedWordSpan.remove();
+                        
+                        let originalWordElement = document.getElementById(sourceId);
+                        if (originalWordElement) {
+                            originalWordElement.style.display = 'block';
+                            originalWordElement.style.opacity = '1';
+                        }
+
+                        if (target.classList.contains('gist-drop-target-table')) {
+                            updateGistResult();
+                        }
+                    }
+                });
+            });
+            
+            updateGistResult(); 
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>

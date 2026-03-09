@@ -1,4 +1,4 @@
-# Zombies Finished
+# Zombies
 
 A Pen created on CodePen.
 
